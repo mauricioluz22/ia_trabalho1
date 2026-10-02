@@ -1,3 +1,5 @@
+import time
+
 import pandas as pd
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.neural_network import MLPClassifier
@@ -123,6 +125,18 @@ def testar_dataset(dataset_str_id = "alternativo"):
         "alternativo": (X_train_alternative_ds, Y_train_alternative_ds, X_val_alternative_ds, Y_val_alternative_ds)
     }
     print("Usando dataset:", dataset_str_id)
+    if dataset_str_id == "original":
+        for name, model in classificadores.items():
+            start = time.time_ns()
+            model.fit(X_train_original_ds, Y_train_original_ds)
+            delta_time = time.time_ns() - start
+            print(f"Tempo de treino, {name}: {delta_time / 1e+6}")
+    elif dataset_str_id == "alternativo":
+        for name, model in classificadores.items():
+            start = time.time_ns()
+            model.fit(X_train_alternative_ds, Y_train_alternative_ds)
+            delta_time = time.time_ns() - start
+            print(f"Tempo de treino, {name}: {delta_time / 1e+6}")
     # as funcoes sao chamadas aqui
     # operador * expande a tupla
     __encontrar_melhor_modelo(*dic[dataset_str_id])
@@ -147,8 +161,13 @@ def classificar_estado(estado, classificador_nome, dataset_a_comparar = "alterna
 
 inicializar_algoritmos("alternativo")
 testar_dataset("alternativo")
-print(classificar_estado([5,2,7,1,1,2,0], "KNN", "alternativo"))
-print(classificar_estado([5,2,7,1,1,2,0], "MLP", "alternativo"))
-print(classificar_estado([5,2,7,1,1,2,0], "DecisionTree", "alternativo"))
-# classificar_estado(['1','0','0','0','1','0','1','0','0','1','0','0','1','0','0','0','1','0','0','1','0','1','0','0','0','1','0'], "DecisionTree", "original")
+# baseado no teste abaixo.
+print(classificar_estado([5,4,9,1,0,0,0], "KNN", "alternativo"))
+print(classificar_estado([5,4,9,1,0,0,0], "MLP", "alternativo"))
+print(classificar_estado([5,4,9,1,0,0,0], "DecisionTree", "alternativo"))
+
+#caso de teste abaixo deve resultar em empate
+# print(classificar_estado(['1','0','0','0','1','0','1','0','0','1','0','0','1','0','0','0','1','0','0','1','0','1','0','0','0','1','0'], "KNN", "original"))
+# print(classificar_estado(['1','0','0','0','1','0','1','0','0','1','0','0','1','0','0','0','1','0','0','1','0','1','0','0','0','1','0'], "MLP", "original"))
+# print(classificar_estado(['1','0','0','0','1','0','1','0','0','1','0','0','1','0','0','0','1','0','0','1','0','1','0','0','0','1','0'], "DecisionTree", "original"))
 
