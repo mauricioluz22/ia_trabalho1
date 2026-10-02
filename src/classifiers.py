@@ -18,7 +18,7 @@ def __divide_dataset(dataset):
 
     # random_state = 42 por questao de determinismo ao dividir o dataset em varias execucoes
     X_temp, X_test, Y_temp, Y_test = train_test_split(X, Y, test_size=0.2, random_state=__random_state)
-    # 0.25 porque 0.8 * 0.2 = 20% do dataset original (que ja foi dividido em parte 80% (temp) e 20% (test))
+    # 0.25 porque 0.8 * 0.25 = 20% do dataset original (que ja foi dividido em parte 80% (temp) e 20% (test))
     X_train, X_val, Y_train, Y_val = train_test_split(X_temp, Y_temp, test_size=0.25, random_state=__random_state)
 
     return (X_train, X_val, X_test, Y_train, Y_val, Y_test)
