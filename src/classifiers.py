@@ -43,8 +43,8 @@ classificadores = {
     # UPDATE: 50 neuronios na camada oculta se provou bom!! heuristica: p deve ser menor que o dobro da camada de entrada
     # UPDATE 2: deixa pra la kk
     # max_iter = 200 porque: valores mais altos nao levam o erro a cair mais. so fazem o algoritmo demorar mais
-    # learning_rate_init = 0.01 porque: o valor original (0.001) tende a lever a resultados melhores E faz o algoritmo
-    # convergir mais rapido. me impressiona um pouco que nn prejudique os as predicoes
+    # learning_rate_init = 0.01 porque: o valor tende a lever a resultados melhores E faz o algoritmo
+    # convergir mais rapido. me impressiona um pouco que nn prejudique as predicoes
     "MLP": MLPClassifier(hidden_layer_sizes=11, max_iter=200, learning_rate_init=0.01, random_state=__random_state),
     # min_samples_split e min_samples_leaf usam os valores padrao da funcao, definidos explicitamente para poderem ser alterados depois
     # max_depth = 12 porque: teste empirico. tende a retornar melhores valores. valores maiores nao trazem melhora alguma,
