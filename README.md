@@ -13,7 +13,10 @@ digido especifico dentro de um trio de digitos, isto é, teriamos, por exemplo: 
 
 Também foram gerados mais estados com base naqueles ja existentes, mantendo todos os que ja existiam no dataset original.
 de 958 instancias, temos agora 1359, que inclui, como novas instancias, mais instancias de empate (embora so 16 sejam possiveis, aparentemente),
-mais instancias de jogo em andamento (nao finalizado) e mais instancias de o jogando. desse jeito, o dataset ficou aproximadamente balanceado
+mais instancias de jogo em andamento (nao finalizado) e mais instancias de o jogando. desse jeito, o dataset ficou aproximadamente balanceado.
+
+Os nomes dos arquivos sao prefixados pelo nome original (tic-tac-toe.data). O final indica qual versão ele corresponde (4classes - versao com 4 classes diferentes,
+4classes.converted - versao que o algoritmo consegue ler e usar, e, por fim, 4classes.converted.alternative, que é a versão alternativa sugerida no enunciado)
 
 ## Formato alternativo do dataset
 
