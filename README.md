@@ -23,7 +23,7 @@ Os nomes dos arquivos sao prefixados pelo nome original (tic-tac-toe.data). O fi
 Implementado conforme o enunciado
 
 ## Uso do programa
-Só rodar `python` com o arquivo que se deseja executar.
+Só rodar `python` com o arquivo que se deseja executar. Só tem que ser a partir do mesmo diretório (oops)
 
 `dataset_converter.py` converte os datasets pro formato que os classificadores leem.
 
