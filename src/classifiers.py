@@ -33,20 +33,30 @@ dataset_alternativo = pd.read_csv(arquivo_alternativo)
 # random_state pode ser definido como um valor fixo posteriormente para que resultados sejam replicaveis
 # entre diferentes execucoes
 classificadores = {
+    # justificativa n_neighbors=5: testes empiricos. k maior que 5 tende a apresentar poucas melhoras (e eventualmente apresenta PIORAS!),
+    # enquanto valores pequenos, menores que 5, tendem a apresentar resultados pouco bons ou muito ruins
     "KNN": KNeighborsClassifier(n_neighbors=5),
-    # regra da piramide geometrica = sqrt(27 * 4),
+    # regra da piramide geometrica = sqrt(27 * 4) = 11,
     # onde 27 = numero de entradas para o arquivo_original e 4 = classes (saídas: tem jogo, x venceu etc)
     # UPDATE: 50 neuronios na camada oculta se provou bom!! heuristica: p deve ser menor que o dobro da camada de entrada
     # UPDATE 2: deixa pra la kk
+    # max_iter = 200 porque: valores mais altos nao levam o erro a cair mais. so fazem o algoritmo demorar mais
+    # learning_rate_init = 0.01 porque: o valor original (0.001) tende a lever a resultados melhores E faz o algoritmo
+    # convergir mais rapido. me impressiona um pouco que nn prejudique os as predicoes
     "MLP": MLPClassifier(hidden_layer_sizes=11, max_iter=200, learning_rate_init=0.01, random_state=__random_state),
-    # valores padrao da funcao, definidos explicitamente para poderem ser alterados depois
-    # max_depth = 12 porque: teste empirico. tende a retornar melhores valores
+    # min_samples_split e min_samples_leaf usam os valores padrao da funcao, definidos explicitamente para poderem ser alterados depois
+    # max_depth = 12 porque: teste empirico. tende a retornar melhores valores. valores maiores nao trazem melhora alguma,
+    # e valores menores nao sao tao bons
+    # class-weight = 'balanced' porque: reduz as consequencias do numero de instancias de classe 'empate'
+    # serem tao pequenas em relacao as outras. previne problemas de divisao por zero, que, ate o momento, acontecem um bocado
+    # nos outros algoritmos
     "DecisionTree": DecisionTreeClassifier(max_depth=12, min_samples_split=2, min_samples_leaf=1, random_state=__random_state, class_weight='balanced')
 
     # TODO - definir outro algoritmo aqui
     # TODO - definir outro algoritmo aqui tambem
 }
 
+# NOTE - variavel inutil (ate entao pelo menos)
 classif_idx_to_name = { 0 : "KNN", 1 : "MLP", 2 : "DecisionTree" }
 
 # sugestao da professora: comecar com 200 amostras de cada classe
@@ -78,7 +88,7 @@ X_train_original_ds, X_val_original_ds, X_test_original_ds, Y_train_original_ds,
 # X_train_alternative_ds, X_val_alternative_ds, X_test_alternative_ds, Y_train_alternative_ds, Y_val_alternative_ds, Y_test_alternative_ds = __divide_dataset(dataset_alternativo)
 X_train_alternative_ds, X_val_alternative_ds, X_test_alternative_ds, Y_train_alternative_ds, Y_val_alternative_ds, Y_test_alternative_ds = __divide_dataset(part_alternativo)
 
-def inicializar_algoritmos(dataset_a_usar_str):
+def inicializar_algoritmos(dataset_a_usar_str = "alternativo"):
     # columns=foo.columns mapeia o estado do jogo as colunas do dataset
     if dataset_a_usar_str == "original":
         for name, model in classificadores.items():
@@ -106,7 +116,7 @@ def __encontrar_melhor_modelo(X_train, Y_train, X_val, Y_val):
         print(name + ":", scores.mean(), scores.std())
 
 
-def testar_dataset(dataset_str_id):
+def testar_dataset(dataset_str_id = "alternativo"):
     dic = {
         # TODO - trocar _val_ por _test_ para TESTAR os algoritmos
         "original" : (X_train_original_ds, Y_train_original_ds, X_val_original_ds, Y_val_original_ds),
@@ -126,17 +136,19 @@ def __converter_tabuleiro(tabuleiro, dataset_str):
 # Argumentos exemplo: matriz do jogo, "KNN", "original"
 # Argumentos exemplo: matriz do jogo, "MLP", "alternativo"
 # Argumentos exemplo: matriz do jogo, "DecisionTree", "original"
-def classificar_estado(estado, classificador_nome, dataset_a_comparar):
+def classificar_estado(estado, classificador_nome, dataset_a_comparar = "alternativo"):
     # TODO - tabuleiro precisara ser convertido
 
     # columns=foo.columns mapeia o estado do jogo as colunas do dataset
     if dataset_a_comparar == "original":
-        print(classificadores[classificador_nome].predict(pd.DataFrame([__converter_tabuleiro(estado, dataset_a_comparar)], columns=X_train_original_ds.columns)))
+        return classificadores[classificador_nome].predict(pd.DataFrame([__converter_tabuleiro(estado, dataset_a_comparar)], columns=X_train_original_ds.columns))
     elif dataset_a_comparar == "alternativo":
-        print(classificadores[classificador_nome].predict(pd.DataFrame([__converter_tabuleiro(estado, dataset_a_comparar)], columns=X_train_alternative_ds.columns)))
+        return classificadores[classificador_nome].predict(pd.DataFrame([__converter_tabuleiro(estado, dataset_a_comparar)], columns=X_train_alternative_ds.columns))
 
 inicializar_algoritmos("alternativo")
 testar_dataset("alternativo")
-classificar_estado([5,2,7,1,1,2,0], "DecisionTree", "alternativo")
+print(classificar_estado([5,2,7,1,1,2,0], "KNN", "alternativo"))
+print(classificar_estado([5,2,7,1,1,2,0], "MLP", "alternativo"))
+print(classificar_estado([5,2,7,1,1,2,0], "DecisionTree", "alternativo"))
 # classificar_estado(['1','0','0','0','1','0','1','0','0','1','0','0','1','0','0','0','1','0','0','1','0','1','0','0','0','1','0'], "DecisionTree", "original")
 
