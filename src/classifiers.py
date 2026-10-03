@@ -4,6 +4,11 @@ import pandas as pd
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.neural_network import MLPClassifier
 from sklearn.tree import DecisionTreeClassifier
+from sklearn.svm import SVC
+from sklearn.naive_bayes import GaussianNB
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+
 
 # so para verificar os resultados
 from sklearn.dummy import DummyClassifier
@@ -18,26 +23,26 @@ def __divide_dataset(dataset):
     X = dataset.iloc[:, :-1]
     Y = dataset.iloc[:, -1]
 
-    # random_state = 42 por questao de determinismo ao dividir o dataset em varias execucoes
-    X_temp, X_test, Y_temp, Y_test = train_test_split(X, Y, test_size=0.2, random_state=__random_state)
-    # 0.25 porque 0.8 * 0.25 = 20% do dataset original (que ja foi dividido em parte 80% (temp) e 20% (test))
-    X_train, X_val, Y_train, Y_val = train_test_split(X_temp, Y_temp, test_size=0.25, random_state=__random_state)
+    # random_state = 42 por questao de determinismo ao dividir o dataset em varias execucoes, adicionado estratificação para ser proporcional cada classe
+    X_temp, X_test, Y_temp, Y_test = train_test_split(X, Y, test_size=0.2, random_state=__random_state, stratify=Y)
+    # 0.25 porque 0.8 * 0.25 = 20% do dataset original (que ja foi dividido em parte 80% (temp) e 20% (test)), adicionado estratificação aqui tambem
+    X_train, X_val, Y_train, Y_val = train_test_split(X_temp, Y_temp, test_size=0.25, random_state=__random_state, stratify=Y_temp)
 
     return (X_train, X_val, X_test, Y_train, Y_val, Y_test)
 
-arquivo_original = "tic-tac-toe.data.4classes.converted"
-arquivo_alternativo = "tic-tac-toe.data.4classes.converted.alternative"
+arquivo_original = "src/tic-tac-toe.data.4classes.converted"
+arquivo_alternativo = "src/tic-tac-toe.data.4classes.converted.alternative"
 
 dataset_original = pd.read_csv(arquivo_original)
 dataset_alternativo = pd.read_csv(arquivo_alternativo)
 
-# TODO -  importar mais dois algoritmos
 # random_state pode ser definido como um valor fixo posteriormente para que resultados sejam replicaveis
 # entre diferentes execucoes
+#pipeline = é uma forma de garantir que os números sejam ajustados do mesmo jeito sempre que o modelo for usado
 classificadores = {
     # justificativa n_neighbors=5: testes empiricos. k maior que 5 tende a apresentar poucas melhoras (e eventualmente apresenta PIORAS!),
     # enquanto valores pequenos, menores que 5, tendem a apresentar resultados pouco bons ou muito ruins
-    "KNN": KNeighborsClassifier(n_neighbors=5),
+    "KNN": make_pipeline(StandardScaler(), KNeighborsClassifier(n_neighbors=5)),
     # regra da piramide geometrica = sqrt(27 * 4) = 11,
     # onde 27 = numero de entradas para o arquivo_original e 4 = classes (saídas: tem jogo, x venceu etc)
     # UPDATE: 50 neuronios na camada oculta se provou bom!! heuristica: p deve ser menor que o dobro da camada de entrada
@@ -45,21 +50,20 @@ classificadores = {
     # max_iter = 200 porque: valores mais altos nao levam o erro a cair mais. so fazem o algoritmo demorar mais
     # learning_rate_init = 0.01 porque: o valor tende a lever a resultados melhores E faz o algoritmo
     # convergir mais rapido. me impressiona um pouco que nn prejudique as predicoes
-    "MLP": MLPClassifier(hidden_layer_sizes=11, max_iter=200, learning_rate_init=0.01, random_state=__random_state),
+    "MLP": make_pipeline(StandardScaler(), MLPClassifier(hidden_layer_sizes=11, max_iter=200, learning_rate_init=0.01, random_state=__random_state)),
     # min_samples_split e min_samples_leaf usam os valores padrao da funcao, definidos explicitamente para poderem ser alterados depois
     # max_depth = 12 porque: teste empirico. tende a retornar melhores valores. valores maiores nao trazem melhora alguma,
     # e valores menores nao sao tao bons
     # class-weight = 'balanced' porque: reduz as consequencias do numero de instancias de classe 'empate'
     # serem tao pequenas em relacao as outras. previne problemas de divisao por zero, que, ate o momento, acontecem um bocado
     # nos outros algoritmos
-    "DecisionTree": DecisionTreeClassifier(max_depth=12, min_samples_split=2, min_samples_leaf=1, random_state=__random_state, class_weight='balanced')
+    "DecisionTree": DecisionTreeClassifier(max_depth=12, min_samples_split=2, min_samples_leaf=1, random_state=__random_state, class_weight='balanced'),
 
-    # TODO - definir outro algoritmo aqui
-    # TODO - definir outro algoritmo aqui tambem
+    "SVM": make_pipeline(StandardScaler(), SVC(kernel="rbf", C=10, gamma="scale", random_state=__random_state)),
+
+    "NaiveBayes": GaussianNB()
 }
 
-# NOTE - variavel inutil (ate entao pelo menos)
-classif_idx_to_name = { 0 : "KNN", 1 : "MLP", 2 : "DecisionTree" }
 
 # sugestao da professora: comecar com 200 amostras de cada classe
 part_tem_jogo_og_ds = dataset_original[dataset_original['classe'] == 0].sample(n=200, random_state=__random_state)
@@ -108,15 +112,16 @@ def __encontrar_melhor_modelo(X_train, Y_train, X_val, Y_val):
         print(confusion_matrix(Y_val, model.predict(X_val)))
         print(name + " accuracy:", model.score(X_val, Y_val))
 
-    scores = cross_val_score(baseline, X_val, Y_val, cv=4, scoring='f1_macro')
+    #cross validation no treino e nao na validação
+    scores = cross_val_score(baseline, X_train, Y_train, cv=4, scoring='f1_macro')
     print()
     print("Model\t\tMean\t\tStandard deviation")
     print("Baseline:", scores.mean(), scores.std())
     for name, model in classificadores.items():
-        # model.fit(X_train, Y_train)
-        scores = cross_val_score(model, X_val, Y_val, cv=4, scoring='f1_macro')
-        print(name + ":", scores.mean(), scores.std())
-
+            # model.fit(X_train, Y_train)
+            scores = cross_val_score(model, X_val, Y_val, cv=4, scoring='f1_macro')
+            print(name + ":", scores.mean(), scores.std())
+    
 
 def testar_dataset(dataset_str_id = "alternativo"):
     dic = {
@@ -159,8 +164,12 @@ def classificar_estado(estado, classificador_nome, dataset_a_comparar = "alterna
     elif dataset_a_comparar == "alternativo":
         return classificadores[classificador_nome].predict(pd.DataFrame([__converter_tabuleiro(estado, dataset_a_comparar)], columns=X_train_alternative_ds.columns))
 
-inicializar_algoritmos("alternativo")
-testar_dataset("alternativo")
+    if __name__ == "__main__":
+        testar_dataset("alternativo")
+        print(classificar_estado([5,4,9,1,0,0,0], "KNN", "alternativo"))
+        print(classificar_estado([5,4,9,1,0,0,0], "MLP", "alternativo"))
+        print(classificar_estado([5,4,9,1,0,0,0], "DecisionTree", "alternativo"))
+
 # baseado no teste abaixo.
 print(classificar_estado([5,4,9,1,0,0,0], "KNN", "alternativo"))
 print(classificar_estado([5,4,9,1,0,0,0], "MLP", "alternativo"))
