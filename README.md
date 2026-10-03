@@ -34,3 +34,12 @@ Os outros arquivos .py sao scripts gerados pelo Claude para gerar as novas insta
 nao ha classes, o que pode ficar meio bagunçado na hora de inicializar e testar os algoritmos...
 
 as funcoes relevantes pra outros modulos são: `inicializar_algoritmos`, `testar_dataset` e `classificar_estado`
+
+### classifiers_class.py
+
+Alternativa pro `classifiers.py`. Inclui uma classe que tem a exata mesma funcionalidade que as funcoes soltas no outro script.
+Diferenca principal e que, com classes, fica mais facil de usar datasets diferentes ao mesmo tempo.
+
+A classe definida se chama `PyClassificadores`. Metodos relevantes pra outros modulos tem os mesmos nomes que as funcoes em `classifiers.py`:
+`testar_dataset` (aqui, executa o teste com o dataset de TESTE) e `classificar_estado`, com a adicao de `validar_dataset` (aqui, executa o teste com o dataset de VALIDACAO). Os algoritmos sao inicializados durante a construcao da instancia, sendo, portanto,
+equivalente a chamar `inicializar_algoritmos` em `classifiers.py`.
