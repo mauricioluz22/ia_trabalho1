@@ -80,6 +80,20 @@ class PyClassificadores:
             print(f"Tempo de treino, {name}: {delta_time / 1e+6}")
         pass
 
+    def classificar_estado(self, estado, classificador_nome):
+        # TODO - tabuleiro precisara ser convertido
+        return self.classificadores[classificador_nome].predict(pd.DataFrame([self.__converter_tabuleiro(estado)], columns=self.X_train.columns))
+
+    def testar_dataset(self):
+        print("Executando benchmark de TESTE")
+        self.__benchmark_dataset(self.X_train, self.Y_train, self.X_test, self.Y_test)
+
+    def validar_dataset(self):
+        print("Executando benchmark de VALIDAÇÃO")
+        self.__benchmark_dataset(self.X_train, self.Y_train, self.X_val, self.Y_val)
+
+
+
     def __divide_dataset(self, pd_dataset):
         X = pd_dataset.iloc[:, :-1]
         Y = pd_dataset.iloc[:, -1]
@@ -113,15 +127,3 @@ class PyClassificadores:
                 # model.fit(X_train, Y_train)
                 scores = cross_val_score(model, X_out, Y_out, cv=4, scoring='f1_macro')
                 print(name + ":", scores.mean(), scores.std())
-
-    def classificar_estado(self, estado, classificador_nome):
-        # TODO - tabuleiro precisara ser convertido
-        return self.classificadores[classificador_nome].predict(pd.DataFrame([self.__converter_tabuleiro(estado)], columns=self.X_train.columns))
-
-    def testar_dataset(self):
-        print("Executando benchmark de TESTE")
-        self.__benchmark_dataset(self.X_train, self.Y_train, self.X_test, self.Y_test)
-
-    def validar_dataset(self):
-        print("Executando benchmark de VALIDAÇÃO")
-        self.__benchmark_dataset(self.X_train, self.Y_train, self.X_val, self.Y_val)
