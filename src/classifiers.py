@@ -16,6 +16,7 @@ from sklearn.dummy import DummyClassifier
 from sklearn.metrics import classification_report, confusion_matrix
 from sklearn.model_selection import train_test_split, cross_val_score
 
+from classifiers_class import PyClassificadores
 # de acordo com a documentacao do scikit, 0 e 42 sao seeds bastante populares
 __random_state = 42
 
@@ -38,7 +39,7 @@ dataset_alternativo = pd.read_csv(arquivo_alternativo)
 
 # random_state pode ser definido como um valor fixo posteriormente para que resultados sejam replicaveis
 # entre diferentes execucoes
-#pipeline = é uma forma de garantir que os números sejam ajustados do mesmo jeito sempre que o modelo for usado
+# pipeline = é uma forma de garantir que os números sejam ajustados do mesmo jeito sempre que o modelo for usado
 classificadores = {
     # justificativa n_neighbors=5: testes empiricos. k maior que 5 tende a apresentar poucas melhoras (e eventualmente apresenta PIORAS!),
     # enquanto valores pequenos, menores que 5, tendem a apresentar resultados pouco bons ou muito ruins
@@ -164,14 +165,40 @@ def classificar_estado(estado, classificador_nome, dataset_a_comparar = "alterna
     elif dataset_a_comparar == "alternativo":
         return classificadores[classificador_nome].predict(pd.DataFrame([__converter_tabuleiro(estado, dataset_a_comparar)], columns=X_train_alternative_ds.columns))
 
-    if __name__ == "__main__":
-        testar_dataset("alternativo")
-        print(classificar_estado([5,4,9,1,0,0,0], "KNN", "alternativo"))
-        print(classificar_estado([5,4,9,1,0,0,0], "MLP", "alternativo"))
-        print(classificar_estado([5,4,9,1,0,0,0], "DecisionTree", "alternativo"))
+if __name__ == "__main__":
+    # pass
+    classif_alt = PyClassificadores("alternativo")
+    classif_alt.testar_dataset()
+    # baseado no teste abaixo.
+    print(classif_alt.classificar_estado([5,4,9,1,0,0,0], "KNN"))
+    print(classif_alt.classificar_estado([5,4,9,1,0,0,0], "MLP"))
+    print(classif_alt.classificar_estado([5,4,9,1,0,0,0], "DecisionTree"))
+    print(classif_alt.classificar_estado([5,4,9,1,0,0,0], "SVM"))
+    print(classif_alt.classificar_estado([5,4,9,1,0,0,0], "NaiveBayes"))
 
 #caso de teste abaixo deve resultar em empate
 # print(classificar_estado(['1','0','0','0','1','0','1','0','0','1','0','0','1','0','0','0','1','0','0','1','0','1','0','0','0','1','0'], "KNN", "original"))
 # print(classificar_estado(['1','0','0','0','1','0','1','0','0','1','0','0','1','0','0','0','1','0','0','1','0','1','0','0','0','1','0'], "MLP", "original"))
 # print(classificar_estado(['1','0','0','0','1','0','1','0','0','1','0','0','1','0','0','0','1','0','0','1','0','1','0','0','0','1','0'], "DecisionTree", "original"))
+    # classif_og = PyClassificadores("original")
+    # classif_og.testar_dataset()
+    # print(classif_og.classificar_estado(['1','0','0','0','1','0','1','0','0','1','0','0','1','0','0','0','1','0','0','1','0','1','0','0','0','1','0'], "KNN"))
+    # print(classif_og.classificar_estado(['1','0','0','0','1','0','1','0','0','1','0','0','1','0','0','0','1','0','0','1','0','1','0','0','0','1','0'], "MLP"))
+    # print(classif_og.classificar_estado(['1','0','0','0','1','0','1','0','0','1','0','0','1','0','0','0','1','0','0','1','0','1','0','0','0','1','0'], "DecisionTree"))
+    # print(classif_og.classificar_estado(['1','0','0','0','1','0','1','0','0','1','0','0','1','0','0','0','1','0','0','1','0','1','0','0','0','1','0'], "SVM"))
+    # print(classif_og.classificar_estado(['1','0','0','0','1','0','1','0','0','1','0','0','1','0','0','0','1','0','0','1','0','1','0','0','0','1','0'], "NaiveBayes"))
 
+    # testar_dataset("alternativo")
+    # # baseado no teste abaixo.
+    # print(classificar_estado([5,4,9,1,0,0,0], "KNN", "alternativo"))
+    # print(classificar_estado([5,4,9,1,0,0,0], "MLP", "alternativo"))
+    # print(classificar_estado([5,4,9,1,0,0,0], "DecisionTree", "alternativo"))
+    # print(classificar_estado([5,4,9,1,0,0,0], "SVM", "alternativo"))
+    # print(classificar_estado([5,4,9,1,0,0,0], "NaiveBayes", "alternativo"))
+    
+    # caso de teste abaixo deve resultar em empate
+    # print(classificar_estado(['1','0','0','0','1','0','1','0','0','1','0','0','1','0','0','0','1','0','0','1','0','1','0','0','0','1','0'], "KNN", "original"))
+    # print(classificar_estado(['1','0','0','0','1','0','1','0','0','1','0','0','1','0','0','0','1','0','0','1','0','1','0','0','0','1','0'], "MLP", "original"))
+    # print(classificar_estado(['1','0','0','0','1','0','1','0','0','1','0','0','1','0','0','0','1','0','0','1','0','1','0','0','0','1','0'], "DecisionTree", "original"))
+    # print(classificar_estado(['1','0','0','0','1','0','1','0','0','1','0','0','1','0','0','0','1','0','0','1','0','1','0','0','0','1','0'], "SVM", "original"))
+    # print(classificar_estado(['1','0','0','0','1','0','1','0','0','1','0','0','1','0','0','0','1','0','0','1','0','1','0','0','0','1','0'], "NaiveBayes", "original"))
