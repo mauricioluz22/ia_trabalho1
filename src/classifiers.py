@@ -170,11 +170,6 @@ def classificar_estado(estado, classificador_nome, dataset_a_comparar = "alterna
         print(classificar_estado([5,4,9,1,0,0,0], "MLP", "alternativo"))
         print(classificar_estado([5,4,9,1,0,0,0], "DecisionTree", "alternativo"))
 
-# baseado no teste abaixo.
-print(classificar_estado([5,4,9,1,0,0,0], "KNN", "alternativo"))
-print(classificar_estado([5,4,9,1,0,0,0], "MLP", "alternativo"))
-print(classificar_estado([5,4,9,1,0,0,0], "DecisionTree", "alternativo"))
-
 #caso de teste abaixo deve resultar em empate
 # print(classificar_estado(['1','0','0','0','1','0','1','0','0','1','0','0','1','0','0','0','1','0','0','1','0','1','0','0','0','1','0'], "KNN", "original"))
 # print(classificar_estado(['1','0','0','0','1','0','1','0','0','1','0','0','1','0','0','0','1','0','0','1','0','1','0','0','0','1','0'], "MLP", "original"))

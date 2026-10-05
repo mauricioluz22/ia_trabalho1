@@ -1,9 +1,6 @@
 # Trabalho 1 IA PUCRS
 
 ## O que falta fazer
-- falta incluir mais dois algoritmos de ia
-- falta implementar o frontend
-- dps do front, vai faltar implementar a conversao do tabuleiro pra algo q o modelo saiba ler
 - avaliar qual modelo é, de fato, melhor
 
 ## Conversão do Dataset
