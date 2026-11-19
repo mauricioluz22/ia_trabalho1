@@ -27,7 +27,7 @@ def pick_move(board: list[list], player, hardmode: bool) -> tuple[int, int]:
     alpha = float("-inf")
     # provavelmente a parte mais lenta do código inteiro :P
     empty_slots = len(options) - 1
-    begin = time.time_ns()
+    table: dict[tuple, tuple[int, str]] = {}
     for i, j in options:
         if board[i][j] == 'b':
             board[i][j] = player
@@ -38,32 +38,62 @@ def pick_move(board: list[list], player, hardmode: bool) -> tuple[int, int]:
                 depth=1,
                 empty_slots=empty_slots,
                 alpha=alpha,
-                beta=float("+inf")
+                beta=float("+inf"),
+                table=table,
+                last_move=(i, j)
             )
             board[i][j] = 'b'
             if tmp_score > score:
                 score = tmp_score
                 move = (i, j)
             alpha = max(alpha,score)
-    print(f"end_pick: {(time.time_ns() - begin) / 1e+9}")
     return move
 
-def __minimax(board: list[list], to_move: str, maxxing_player: str, depth: int, empty_slots: int, alpha, beta) -> int:
+def __minimax(
+    board: list[list],
+    to_move: str,
+    maxxing_player: str,
+    depth: int,
+    empty_slots: int,
+    alpha: float,
+    beta: float,
+    table: dict[tuple, tuple[int, str]],
+    last_move: tuple[int, int]
+) -> int:
     # tambem conta como jogador anterior
     next_player = 'x' if to_move == 'o' else 'o'
     if ttt_wins(board, next_player):
         return 10 - depth if next_player == maxxing_player else depth - 10
-    # if ttt_wins(board, opp):
-        # return depth - 10
     elif empty_slots == 0:
         return 0
+
+    key = (
+        tuple(cell for board_row in board for cell in board_row),
+        to_move,
+        maxxing_player,
+        depth,
+        last_move,
+    )
+    alpha_original = alpha
+    beta_original = beta
+
+    cached = table.get(key)
+    if cached is not None:
+        cached_score, bound = cached
+        if bound == 'exact':
+            return cached_score
+        if bound == 'lower':
+            alpha = max(alpha, cached_score)
+        else:  # upper bound
+            beta = min(beta, cached_score)
+
+        if alpha >= beta:
+            return cached_score
     
-    # player = 'o' if maxxing else 'x'
     maxxing = to_move == maxxing_player
     comparator = lambda x, prev: min(x, prev)
     if maxxing:
         comparator = lambda x, prev: max(x, prev)
-    # scores = []
     score = float("-inf") if maxxing else float("+inf")
 
     for i in range(0,3):
@@ -71,8 +101,15 @@ def __minimax(board: list[list], to_move: str, maxxing_player: str, depth: int, 
             if board[i][j] != 'b':
                 continue
             board[i][j] = to_move
-            # scores.append(__minimax(board, not maxxing, depth + 1))
-            tmpscore =  __minimax(board, next_player, maxxing_player, depth + 1, empty_slots - 1, alpha, beta)
+            tmpscore =  __minimax(
+                board,
+                next_player,
+                maxxing_player,
+                depth + 1,
+                empty_slots - 1,
+                alpha, beta,
+                table, (i, j)
+            )
             board[i][j] = 'b'
 
             score = comparator(score, tmpscore)
@@ -86,15 +123,18 @@ def __minimax(board: list[list], to_move: str, maxxing_player: str, depth: int, 
         if beta <= alpha:
             break
         
-    return int(score)
-    # return max(scores) if maxxing else min(scores)
+    result = int(score)
 
-# def __board_full(board: list[list]):
-#     for row in board:
-#         for p in row:
-#             if p == 'b':
-#                 return False
-#     return True
+    # indica qual score retornar ao encontrar uma tabela igual
+    if result <= alpha_original:
+        bound = 'upper'
+    elif result >= beta_original:
+        bound = 'lower'
+    else:
+        bound = 'exact'
+
+    table[key] = (result, bound)
+    return result
 
 def ttt_wins(board: list[list], player: str):
     for i in range(0, 3):
@@ -111,15 +151,17 @@ def ttt_wins(board: list[list], player: str):
 
 if __name__ == "__main__":
     board = [
-        ['o','b','b'],
-        ['x','b','b'],
-        ['o','x','b']
+        ['b','b','b'],
+        ['b','b','b'],
+        ['b','b','b']
     ]
     # # boardlist = ['o','x','o','b','b','x','x','b','x']
     boardlist = [x for row in board for x in row]
     
     player = 'o'
+    begin = time.time_ns()
     print(pick_move(board, player, hardmode=True))
+    print(f"end={(time.time_ns() - begin) / 1e6}")
     print(pick_move_list(boardlist, player, hardmode=True))
 
     print(ttt_wins(board, 'o'))
