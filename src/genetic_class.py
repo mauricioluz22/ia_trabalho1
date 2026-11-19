@@ -1,5 +1,6 @@
 import sys, time
 from functools import reduce
+from minimax import ttt_wins, pick_move, pick_move_list
 
 import numpy as np
 
@@ -20,12 +21,12 @@ LIM_B = 1 # x
 # nao extrapola o intervalo [p1, p2] em relacao ao blx_alpha
 # gera dois filhos
 # pode levar a perda de diversidade em relacao a alguns operadores, como o BLX-a
-def crossover_arith(p1: list[float], p2: list[float]) -> tuple[list[float], list[float]]:
+def crossover_arith(p1, p2) -> tuple:
     beta = rng.random()
     b = 1 - beta
     return (
-        [float(x) for x in (beta * np.array(p1) + b * np.array(p2))],
-        [float(x) for x in (b * np.array(p1) + beta * np.array(p2))],
+        (beta * np.array(p1) + b * np.array(p2)),
+        (b * np.array(p1) + beta * np.array(p2)),
     )
 
 # blx-alpha ("crossover mistura"). pagina 24 no pdf JAI-ag (no moodle)
@@ -33,7 +34,7 @@ def crossover_arith(p1: list[float], p2: list[float]) -> tuple[list[float], list
 # necessario verificar se filho eh factivel (i.e. se os cromossomos nao ultrapassam um determinado intervalo [a,b]; no nosso caso, [-1,1])
 # diferentes valores de alpha afetam a diversidade do novo cromossomo
 # @single_beta determina se cada gene usará um valor beta aleatório diferente (afeta diversidade)
-def crossover_blx_a(p1: list[float], p2: list[float], alpha: float = 0.25, single_beta: bool = True) -> list[float]:
+def crossover_blx_a(p1, p2, alpha: float = 0.25, single_beta: bool = True):
     if not single_beta:
         res: list[float] = []
         for p, q in zip(p1, p2):
@@ -42,28 +43,23 @@ def crossover_blx_a(p1: list[float], p2: list[float], alpha: float = 0.25, singl
         return res
     
     beta = rng.uniform(-alpha, 1 + alpha)
-    return [float(x) for x in (np.array(p1) + beta * (np.array(p2) - np.array(p1)))]
+    return np.array(p1) + beta * (np.array(p2) - np.array(p1))
 
+# TODO - alterar todas as listas para usarem NDArray do numpy
 class Genetic:
-    def __init__(self, population_size: int, mlp_hidden_layer: int = 18, iterations: int = 300, mutation_rate: float = 0.001, verbose: bool = False):
-        self.matrix = []
+    def __init__(self, population_size: int, mlp_hidden_layer: int = 18, iterations: int = 300, mutation_rate: float = 0.001, hardmode: bool = True, verbose: bool = False):
+        self.mlp_hidden_layer = mlp_hidden_layer
+        # + 1 ao final para a heuristica
+        self.row_len = (self.mlp_hidden_layer * 9 + self.mlp_hidden_layer) + (self.mlp_hidden_layer * 9 + 9) + 1
         self.max_it = iterations
         self.pop_size = population_size
-        self.tasks = []
         self.mutation = mutation_rate
         self.verbose = verbose
         self.iteration = 0
-        self.mlp_hidden_layer = mlp_hidden_layer
+        self.hardmode = hardmode
 
-        # row_len = len(self.tasks)
-        row_len = self.mlp_hidden_layer * 9 * 2 + self.mlp_hidden_layer + 9
-        matrix = []
-        for _ in range(population_size):
-            row = self.__gen_row(row_len)
-            # row.append(self.__heuristic(row))
-            matrix.append(row)
-        self.__heuristic(matrix)
-        self.matrix = matrix
+        self.matrix = rng.uniform(LIM_A,LIM_B,size=(self.pop_size, self.row_len))
+        self.__heuristic(self.matrix)
         
         if self.verbose:
             print('populacao inicial:')
@@ -71,42 +67,36 @@ class Genetic:
             print()
 
     def run(self) -> list[float]:
-        res = self.__apt()
+        res = []
         self.iteration = 0
-        while res == None:
+        while True:
             if self.iteration >= self.max_it or self.__has_converged():
                 res = self.__closest_best()
+                break
             else:
                 self.__update_matrix()
-
-                res = self.__apt()
                 self.iteration += 1
             
-        return res[:-1] if res != None else []
+        return [float(x) for x in res[:-1]]
 
-    # TODO - alterar tambem ao atualizar calculo da heuristica
     def __has_converged(self) -> bool:
-        h_to_count = {}
-        for row in self.matrix:
-            if row[-1] not in h_to_count:
-                h_to_count[row[-1]] = 0
-            h_to_count[row[-1]] += 1
-
-        max = float("-inf")
-        for (_, count) in h_to_count.items():
-            if max < count:
-                max = count
-        return max / self.pop_size >= 0.9
+        _, counts = np.unique(self.matrix[:, -1], return_counts=True)
+        return counts.max() / self.pop_size >= 0.9
 
     def __update_matrix(self):
-        def __valid_kid(kid: list[float]) -> bool:
-            return all(e >= LIM_A and e <= LIM_B for e in kid)
+        # necessario se usarmos BLX-a
+        # def __valid_kid(kid: list[float]) -> bool:
+        #     return all(e >= LIM_A and e <= LIM_B for e in kid)
+
         # selecao por elitismo
         elit = self.__closest_best()
-        intermediate = []
+        # intermediate = np.array([])
+        intermediate = np.zeros((self.pop_size, self.row_len))
         # coluna da heuristica removida nesse passo ate gerarmos toda a nova populacao
-        intermediate.append(elit[:-1])
-        while len(intermediate) < self.pop_size:
+        # intermediate.append(elit[:-1])
+        intermediate[0] = elit
+        idx = 1
+        while idx < self.pop_size:
             # selecao por torneio
             candidates = rng.choice(range(0, self.pop_size), 4)
             father_candidate1 = candidates[0]
@@ -114,9 +104,8 @@ class Genetic:
             mother_candidate1 = candidates[2]
             mother_candidate2 = candidates[3]
 
-            # TODO - alterar comparacao para coincidir com a maneira que estamos calculando a heuristica
-            father = self.matrix[father_candidate1][:-1] if self.matrix[father_candidate1][-1] < self.matrix[father_candidate2][-1] else self.matrix[father_candidate2][:-1]
-            mother = self.matrix[mother_candidate1][:-1] if self.matrix[mother_candidate1][-1] < self.matrix[mother_candidate2][-1] else self.matrix[mother_candidate2][:-1]
+            father = self.matrix[father_candidate1] if self.matrix[father_candidate1][-1] > self.matrix[father_candidate2][-1] else self.matrix[father_candidate2]
+            mother = self.matrix[mother_candidate1] if self.matrix[mother_candidate1][-1] > self.matrix[mother_candidate2][-1] else self.matrix[mother_candidate2]
 
             # reproducao usando BLX-alpha (gera um filho)
             # kid: list[float] = []
@@ -130,20 +119,20 @@ class Genetic:
                 chromossome = rng.choice([kid1, kid2])
                 # descomentar linha abaixo e comentar a de cima ao usar BLX-a
                 # chromossome = kid
-                gene = rng.choice(range(0, len(intermediate[chromossome])))
-                if rng.random() < 0.5:
-                    chromossome[gene] = LIM_A
-                else:
-                    chromossome[gene] = LIM_B
+                gene = rng.choice(range(0, len(chromossome) - 1))
+                chromossome[gene] = LIM_A if rng.random() < 0.5 else LIM_B
 
             # resultado do BLX-a, caso usado:
             # intermediate.append(kid)
 
             # resultado do crossover aritmetico, caso usado
             # primeira comparacao eh redundante. a segunda eh necessaria. mantida por estetica
-            if len(intermediate) < self.pop_size: intermediate.append(kid1)
-            if len(intermediate) < self.pop_size: intermediate.append(kid2)
-
+            if idx < self.pop_size:
+                intermediate[idx] = kid1
+                idx += 1
+            if idx < self.pop_size:
+                intermediate[idx] = kid2
+                idx += 1
         self.__heuristic(intermediate)
         if self.verbose:
             print(f"populacao intermediaria {self.iteration + 1}")
@@ -151,50 +140,94 @@ class Genetic:
             print()
         self.matrix = intermediate
 
-    def __gen_row(self, lim: int) -> list[float]:
-        return [float(x) for x in rng.uniform(LIM_A,LIM_B,size=lim)]
-
-    # TODO - alterar calculo da heuristica (cada individuo deve ser testado na rede neural e verificado o resultado em jogo)
-    def __heuristic(self, intermediate: list[list[float]]) -> None:
+    # Cálculo da heurística:
+    #  
+    # Vitória: +10 pontos
+    # Empate: +4 pontos
+    # Derrota: -2 pontos
+    # Jogada inválida: -10 pontos
+    # Jogada válida: +0.1
+    #
+    # Justificativa para as pontuações: sugeridas pelo Claude. Devem ser capazes de prevenir jogadas ilegais (a rede aprende que
+    # elas não compensam) e incentivar jogadas legais, principalemnte se estas levarem a empate ou a vitória. A seleção do indivíduo,
+    # portanto, se dá por aquele cujo fitness é o mais alto
+    def __heuristic(self, intermediate) -> None:
         ai = None
-        board = ['b'] * 9
         # minimax funciona normalmente com o tabuleiro real
         mapping_o = { 'b': 0, 'o':1, 'x':-1 } # sugestão do claude: peça em jogo é sempre positiva, enquanto oponente é negativo
         mapping_x = { 'b': 0, 'o':-1, 'x':1 } # sugestão do claude: peça em jogo é sempre positiva, enquanto oponente é negativo
         for row in intermediate:
-            score = 0
             # TODO - separar direitinho os pesos e biases
-            # TODO - adicinoar verificacao de dificuldade (dita se todas as jogadas contra a ia sao feitas pelo minimax ou nao)
-            row.append(score)
+            me, other = rng.choice([('x','o'),('o','x')])
+            mapping = mapping_x if me == 'x' else mapping_o
+            minimax_plays = rng.random() < 0.5 # controla se minimax joga primeiro ou não. definido aleatoriamente
+            
+            loops = 1 if self.hardmode else 5
+            subscores = []
+            while loops > 0:
+                me_wins = False
+                they_win = False
+                tie = False
+                game_finished = False
+                board = [['b','b','b'], ['b','b','b'], ['b','b','b']]
+                loops -= 1
+                subscores.append(0)
 
-    # TODO - atualizar para funcionar de acordo com o valor de heuristica que considerarmos como efetivamente melhor (valor mais alto?)
-    def __closest_best(self) -> list[float]:
-        best = (float('+inf'), [])
+                while not game_finished:
+                    if minimax_plays:
+                        # begin = time.time_ns()
+                        (i, j) = pick_move(board, other, hardmode=self.hardmode)
+                        # print(f"end={not minimax_plays}={(time.time_ns() - begin) / 1e6}")
+                        if j < 0 or i < 0:
+                            break # jogo terminou. checagem potencialmente redundante
+                        board[i][j] = other
+                        minimax_plays = False
+                    else:
+                        # TODO - Fazer IA realizar as jogadas
+                        (i, j) = (0,0)
+                        # verifica se a jogada é inválida
+                        if board[i][j] != 'b':
+                            subscores[-1] -= 10
+                            break # jogo termina imediatamente em caso de jogada inválida
+                        subscores[-1] += 0.1
+                        board[i][j] = me
+                        minimax_plays = True
+                    me_wins = ttt_wins(board, me)
+                    they_win = ttt_wins(board, other)
+                    tie = not me_wins and not they_win and all(x != 'b' for x in [e for row in board for e in row])
+        
+                    game_finished = me_wins or they_win or tie
+                if me_wins:
+                    subscores[-1] += 10
+                elif they_win:
+                    subscores[-1] -= 2
+                elif tie:
+                    subscores[-1] += 4
+            # np.append(row, float(np.average(subscores)))
+            row[-1] = np.average(subscores)
+
+    def __closest_best(self):
+        best = (float('-inf'), [])
         for individual in self.matrix:
-            if individual[-1] < best[0]:
+            if individual[-1] > best[0]:
                 best = (individual[-1], individual)
         return best[1]
 
-    # TODO - adaptar à heurística
-    def __best(self) -> list[float]:
-        best = []
-        for individual in self.matrix:
-            best = individual if individual[-1] == 0 else best
-        return best
-
-    def __apt(self) -> list[float] | None:
-        best = self.__best()
-        return None if len(best) == 0 else best
+    # difícil dizer quem é efetivamente APTO
+    def __apt(self):
+        # best = None
+        # for individual in self.matrix:
+        #     best = individual if individual[-1] == 0 else best
+        # return best
+        return None
 
 if __name__ == "__main__":
     g = None
     if len(sys.argv) >= 2:
-        g = Genetic(int(sys.argv[1]), 2, verbose=True)
+        g = Genetic(int(sys.argv[1]), 2, verbose=False)
     else:
-        g = Genetic(100, 18, verbose=False)
-    # print(g.tasks)
-    # [print(x) for x in g.matrix]
-    # print(g.run())
+        g = Genetic(50, 18, iterations=20, hardmode=True, verbose=False)
+    print(g.run())
     print(g.iteration)
-    print(crossover_arith([float(x) for x in rng.uniform(LIM_A,LIM_B,size=3)], [float(x) for x in rng.uniform(LIM_A,LIM_B,size=3)]))
-    print(crossover_blx_a([float(x) for x in rng.uniform(LIM_A,LIM_B,size=3)], [float(x) for x in rng.uniform(LIM_A,LIM_B,size=3)], single_beta=False))
+    # print(crossover_arith([float(x) for x in rng.uniform(LIM_A,LIM_B,size=3)], [float(x) for x in rng.uniform(LIM_A,LIM_B,size=3)]))
+    # print(crossover_blx_a([float(x) for x in rng.uniform(LIM_A,LIM_B,size=3)], [float(x) for x in rng.uniform(LIM_A,LIM_B,size=3)], single_beta=False))
