@@ -78,6 +78,20 @@ class Genetic:
             
         return [float(x) for x in res[:-1]]
 
+    # Provavelmente inutil, mas como todos os membros da classe sao de acesso publico,
+    # pode servir para expor o estado do algoritmo genético um passo por vez no front.
+    # Se não servir, paciência.
+    #
+    # Retorna True quando as iterações chegam ao fim, ou por convergência, ou por número de iterações, 
+    # e retorna, também, a lista de pesos.
+    # Retorna False enquanto o algoritmo não termina e uma lista vazia.
+    def run_single_loop(self) -> tuple[bool, list[float]]:
+        if self.iteration >= self.max_it or self.__has_converged():
+            return (True, [float(x) for x in self.__closest_best()[:-1]])
+        self.__update_matrix()
+        self.iteration += 1
+        return (False, [])
+       
     def __has_converged(self) -> bool:
         _, counts = np.unique(self.matrix[:, -1], return_counts=True)
         return counts.max() / self.pop_size >= 0.9
