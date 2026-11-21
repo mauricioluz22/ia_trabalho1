@@ -45,7 +45,6 @@ def crossover_blx_a(p1, p2, alpha: float = 0.25, single_beta: bool = True):
     beta = rng.uniform(-alpha, 1 + alpha)
     return np.array(p1) + beta * (np.array(p2) - np.array(p1))
 
-# TODO - alterar todas as listas para usarem NDArray do numpy
 class Genetic:
     def __init__(self, population_size: int, mlp_hidden_layer: int = 18, iterations: int = 300, mutation_rate: float = 0.001, hardmode: bool = True, verbose: bool = False):
         self.mlp_hidden_layer = mlp_hidden_layer
@@ -158,9 +157,9 @@ class Genetic:
         mapping_x = { 'b': 0, 'o':-1, 'x':1 } # sugestão do claude: peça em jogo é sempre positiva, enquanto oponente é negativo
         for row in intermediate:
             # TODO - separar direitinho os pesos e biases
-            me, other = rng.choice([('x','o'),('o','x')])
-            mapping = mapping_x if me == 'x' else mapping_o
             minimax_plays = rng.random() < 0.5 # controla se minimax joga primeiro ou não. definido aleatoriamente
+            me, other = ('o','x') if minimax_plays else ('x', 'o')
+            mapping = mapping_x if me == 'x' else mapping_o
             
             loops = 1 if self.hardmode else 5
             subscores = []
@@ -168,12 +167,12 @@ class Genetic:
                 me_wins = False
                 they_win = False
                 tie = False
-                game_finished = False
                 board = [['b','b','b'], ['b','b','b'], ['b','b','b']]
+                empty_count = 9
                 loops -= 1
                 subscores.append(0)
 
-                while not game_finished:
+                while empty_count > 0:
                     if minimax_plays:
                         # begin = time.time_ns()
                         (i, j) = pick_move(board, other, hardmode=self.hardmode)
@@ -181,9 +180,12 @@ class Genetic:
                         if j < 0 or i < 0:
                             break # jogo terminou. checagem potencialmente redundante
                         board[i][j] = other
+                        empty_count -= 1
                         minimax_plays = False
                     else:
                         # TODO - Fazer IA realizar as jogadas
+                        # remapped = [[mapping[x] for x in row] for row in board]
+                        # print(me, remapped)
                         (i, j) = (0,0)
                         # verifica se a jogada é inválida
                         if board[i][j] != 'b':
@@ -191,12 +193,12 @@ class Genetic:
                             break # jogo termina imediatamente em caso de jogada inválida
                         subscores[-1] += 0.1
                         board[i][j] = me
+                        empty_count -= 1
                         minimax_plays = True
                     me_wins = ttt_wins(board, me)
                     they_win = ttt_wins(board, other)
-                    tie = not me_wins and not they_win and all(x != 'b' for x in [e for row in board for e in row])
+                    tie = not me_wins and not they_win and empty_count == 0
         
-                    game_finished = me_wins or they_win or tie
                 if me_wins:
                     subscores[-1] += 10
                 elif they_win:
@@ -226,7 +228,7 @@ if __name__ == "__main__":
     if len(sys.argv) >= 2:
         g = Genetic(int(sys.argv[1]), 2, verbose=False)
     else:
-        g = Genetic(50, 18, iterations=20, hardmode=True, verbose=False)
+        g = Genetic(50, 18, iterations=20, hardmode=False, verbose=False)
     print(g.run())
     print(g.iteration)
     # print(crossover_arith([float(x) for x in rng.uniform(LIM_A,LIM_B,size=3)], [float(x) for x in rng.uniform(LIM_A,LIM_B,size=3)]))
