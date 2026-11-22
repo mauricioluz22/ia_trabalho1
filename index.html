@@ -1,195 +1,194 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-BR">
 <head>
-<meta charset="UTF-8">
+<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Jogo da velha com IA</title>
+<title>Jogo da velha – RN + AG + Minimax</title>
 <style>
-  body { font-family: system-ui, sans-serif; max-width: 720px; margin: 24px auto; padding: 0 16px; color: #1c1c1c; }
-  #status { font-size: 1.15rem; margin: 12px 0; min-height: 1.5em; }
-  #tab { display: grid; grid-template-columns: repeat(3, 84px); gap: 6px; }
-  #tab button { width: 84px; height: 84px; font-size: 2rem; cursor: pointer; border: 2px solid #444; background: #fff; border-radius: 4px; }
-  #tab button:disabled { cursor: default; }
-  #tab button:focus-visible, button.acao:focus-visible { outline: 3px solid #1f6feb; outline-offset: 2px; }
-  table { border-collapse: collapse; margin-top: 8px; }
-  td, th { border: 1px solid #bbb; padding: 4px 10px; text-align: left; }
-  #log { max-height: 220px; overflow: auto; font-family: ui-monospace, monospace; font-size: .85rem; border: 1px solid #bbb; padding: 8px; margin-top: 8px; white-space: pre-wrap; }
-  .erro { color: #b3261e; }
-  button.acao { padding: 6px 14px; margin-right: 8px; cursor: pointer; }
-  label { margin-right: 16px; }
+  body { font-family: system-ui, sans-serif; max-width: 960px; margin: 1rem auto; padding: 0 1rem; color: #222; }
+  nav button { padding: .5rem 1rem; border: 1px solid #888; background: #eee; cursor: pointer; }
+  nav button.on { background: #234; color: #fff; }
+  section { display: none; margin-top: 1rem; } section.on { display: block; }
+  .tab { display: grid; grid-template-columns: repeat(3, 72px); gap: 4px; margin: .5rem 0; }
+  .tab button, .mini div { width: 72px; height: 72px; font-size: 2rem; font-weight: bold; }
+  .mini { display: grid; grid-template-columns: repeat(3, 40px); gap: 2px; }
+  .mini div { width: 40px; height: 40px; font-size: 1.2rem; border: 1px solid #999; display: flex; align-items: center; justify-content: center; }
+  .mini div.inv { background: #fbb; }
+  label { margin-right: 1rem; display: inline-block; margin-bottom: .4rem; }
+  input[type=number] { width: 5rem; }
+  .acao { padding: .4rem .9rem; margin-right: .4rem; cursor: pointer; }
+  #pop { max-height: 260px; overflow: auto; border: 1px solid #ccc; font-size: .85rem; }
+  .linha { display: flex; align-items: center; gap: 6px; padding: 1px 4px; }
+  .linha .n { width: 2.5rem; text-align: right; } .linha .v { width: 3.5rem; text-align: right; }
+  .barra { height: 10px; background: #36c; } .barra.elite { background: #c93; }
+  table { border-collapse: collapse; } td, th { border: 1px solid #aaa; padding: 3px 8px; text-align: right; }
+  .flex { display: flex; gap: 1.5rem; flex-wrap: wrap; }
 </style>
 </head>
 <body>
-<h1>Jogo da velha</h1>
-<p>Você joga com <b>X</b> (começa). A máquina joga com <b>O</b>, em casas aleatórias.</p>
-<p>
-  <label>Dataset <select id="ds"></select></label>
-  <label>Classificador <select id="clf"></select></label>
-</p>
+<h1>Jogo da velha – Rede Neural + Algoritmo Genético + Minimax</h1>
+<nav>
+  <button data-t="t1" class="on">1. Jogar contra o Minimax</button>
+  <button data-t="t2">2. Treinar a rede</button>
+  <button data-t="t3">3. Jogar contra a rede</button>
+</nav>
 
-<div id="status" role="status" aria-live="polite"></div>
-<div id="tab"></div>
-<p><button class="acao" id="novo">Novo jogo</button><button class="acao" id="copiar">Copiar relatório</button><button class="acao" id="zerar">Zerar contadores</button></p>
+<!-- ===== 1. Usuario x Minimax ===== -->
+<section id="t1" class="on">
+  <label>Modo do Minimax <select id="m1modo"><option value="dificil">Difícil</option><option value="medio">Médio</option></select></label>
+  <label>Quem começa <select id="m1ini"><option value="u">Você (X)</option><option value="m">Minimax (X)</option></select></label>
+  <button class="acao" id="m1novo">Novo jogo</button>
+  <div id="m1st" role="status" aria-live="polite"></div>
+  <div class="tab" id="m1tab"></div>
+</section>
 
-<h2>Desempenho da IA</h2>
-<table id="stats">
-  <thead><tr><th>Dataset / classificador</th><th>Avaliações</th><th>Acertos</th><th>Erros</th><th>Acurácia</th><th>Não detectou fim</th><th>Fim inexistente</th><th>Resultado errado</th></tr></thead>
-  <tbody></tbody>
-</table>
-<p id="jogos"></p>
-<div id="log" aria-label="Registro das avaliações"></div>
+<!-- ===== 2. Treino ===== -->
+<section id="t2">
+  <p>
+    <label>População (N) <input type="number" id="p_pop" value="120" min="4"></label>
+    <label>Neurônios ocultos <input type="number" id="p_hid" value="9" min="1"></label>
+    <label>Gerações (máx.) <input type="number" id="p_ger" value="120" min="1"></label>
+    <label>Passa p/ Difícil na geração <input type="number" id="p_hf" value="80" min="0"></label>
+    <label>Mutação (por gene) <input type="number" id="p_mut" value="0.03" step="0.01" min="0" max="1"></label>
+  </p>
+  <button class="acao" id="t_ini">Iniciar / reiniciar</button>
+  <button class="acao" id="t_passo" disabled>1 geração (passo)</button>
+  <button class="acao" id="t_auto" disabled>▶ Treinar automático</button>
+  <div id="t_st" role="status" aria-live="polite" style="margin:.6rem 0"></div>
+  <div class="flex">
+    <div><canvas id="graf" width="520" height="240" style="border:1px solid #ccc"></canvas>
+      <div style="font-size:.8rem">Azul: melhor · Verde: média · Vermelho: pior · linha tracejada: troca Médio→Difícil</div></div>
+    <div><b>Melhor rede x Minimax (geração atual)</b><div id="demo"></div></div>
+  </div>
+  <h3>População (ordenada por aptidão; laranja = elite)</h3>
+  <div id="pop"></div>
+</section>
+
+<!-- ===== 3. Usuario x Rede ===== -->
+<section id="t3">
+  <p>Usa a melhor rede da última geração treinada (aba 2).</p>
+  <label>Quem começa <select id="r3ini"><option value="u">Você (X)</option><option value="r">Rede (X)</option></select></label>
+  <button class="acao" id="r3novo">Novo jogo</button>
+  <button class="acao" id="r3acc">Calcular acurácia (rede x Minimax)</button>
+  <label>Partidas no Médio <input type="number" id="r3n" value="50" min="2"></label>
+  <div id="r3st" role="status" aria-live="polite"></div>
+  <div class="tab" id="r3tab"></div>
+  <table id="acc" hidden><thead><tr><th>Modo</th><th>Partidas</th><th>Vitórias</th><th>Empates</th><th>Derrotas</th><th>Jogadas inválidas</th><th>Acurácia</th></tr></thead><tbody></tbody></table>
+  <p id="accnota" style="font-size:.85rem" hidden>Acurácia = partidas sem derrota e sem jogada inválida. No modo Difícil o Minimax é determinístico, então só há 2 partidas distintas (quem começa).</p>
+  <p id="r3placar"></p>
+</section>
 
 <script>
-const CLASSES = ["em andamento", "vitória do X", "vitória do O", "empate"];
-const SIMB = ["b", "x", "o"];         // 0 vazio, 1 X, 2 O
-
-// ===== Chamada à IA (servidor.py -> classifiers.classificar_estado) =====
-async function ia(tab) {
-  const resp = await fetch("/classificar", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ tabuleiro: tab.map(v => SIMB[v]), classificador: pegar("clf").value, dataset: pegar("ds").value })
-  });
-  if (!resp.ok) throw new Error("HTTP " + resp.status);
-  return (await resp.json()).classe;  // 0..3
-}
-
-// ===== Regra exata: usada SOMENTE para medir acertos/erros da IA =====
+const $ = id => document.getElementById(id);
+const api = async (url, body) => {
+  const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
+  const j = await r.json(); if (!r.ok) throw new Error(j.erro || r.status); return j;
+};
 const LINHAS = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
-function real(t) {
-  for (const [a, b, c] of LINHAS) if (t[a] && t[a] === t[b] && t[b] === t[c]) return t[a];
-  return t.includes(0) ? 0 : 3;
+const vencedor = t => { for (const [a,b,c] of LINHAS) if (t[a] !== 'b' && t[a] === t[b] && t[b] === t[c]) return t[a]; return t.includes('b') ? null : 'empate'; };
+const up = c => c === 'b' ? '' : c.toUpperCase();
+
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("nav button, section").forEach(e => e.classList.remove("on"));
+  b.classList.add("on"); $(b.dataset.t).classList.add("on");
+});
+
+// Jogo generico: humano = X ou O, oponente via funcao async oponente(tab, peca) -> {casa, invalida}
+function criaJogo(idTab, idSt, oponente, nome) {
+  const J = { tab: [], fim: true, humano: 'x', ocupado: false };
+  J.novo = async humanoComeca => {
+    J.tab = Array(9).fill('b'); J.fim = false; J.humano = humanoComeca ? 'x' : 'o';
+    msg(`Você é ${J.humano.toUpperCase()}. ${humanoComeca ? "Sua vez." : nome + " começa."}`); draw();
+    if (!humanoComeca) await J.vezOponente();
+  };
+  const msg = t => $(idSt).textContent = t;
+  const draw = () => {
+    const el = $(idTab); el.innerHTML = "";
+    J.tab.forEach((v, i) => { const b = document.createElement("button"); b.textContent = up(v);
+      b.disabled = J.fim || J.ocupado || v !== 'b'; b.onclick = () => J.humanoJoga(i); el.appendChild(b); });
+  };
+  const checa = () => { const v = vencedor(J.tab); if (!v) return false; J.fim = true;
+    msg(v === 'empate' ? "Empate." : v === J.humano ? "Você venceu!" : nome + " venceu."); J.resultado && J.resultado(v === 'empate' ? 'empate' : v === J.humano ? 'humano' : 'oponente'); draw(); return true; };
+  J.humanoJoga = async i => { J.tab[i] = J.humano; draw(); if (!checa()) await J.vezOponente(); };
+  J.vezOponente = async () => {
+    J.ocupado = true; draw();
+    const peca = J.humano === 'x' ? 'o' : 'x';
+    try { const r = await oponente(J.tab, peca); J.tab[r.casa] = peca;
+      if (r.invalida) J.invalidas = (J.invalidas || 0) + 1;
+      msg(r.invalida ? nome + " tentou casa ocupada (jogada inválida; usada a melhor casa livre). Sua vez." : "Sua vez."); }
+    catch (e) { msg("Erro: " + e.message); }
+    J.ocupado = false; if (!checa()) draw();
+  };
+  return J;
 }
 
-// ===== Estado =====
-let tab, fim, ocupado = false, nJogo = 0;
-let stats = {}, jogos = 0;         // stats["dataset / classificador"] = {total, ok, fn, fp, wr}
-try {
-  const salvo = JSON.parse(localStorage.getItem("velha-ia-stats") || "{}");
-  stats = salvo.stats || {}; jogos = salvo.jogos || 0;
-} catch (e) {}
+// ----- 1 -----
+const j1 = criaJogo("m1tab", "m1st", (tab, peca) => api("/api/minimax", { tabuleiro: tab, jogador: peca, modo: $("m1modo").value }), "Minimax");
+$("m1novo").onclick = () => j1.novo($("m1ini").value === 'u'); j1.novo(true);
 
-const pegar = id => document.getElementById(id);
-const status = msg => pegar("status").textContent = msg;
-const chave = () => pegar("ds").value + " / " + pegar("clf").value;
-const erros = s => s.fn + s.fp + s.wr;
-
-function render() {
-  const tabEl = pegar("tab"); tabEl.innerHTML = "";
-  tab.forEach((v, i) => {
-    const botao = document.createElement("button");
-    botao.textContent = v === 1 ? "X" : v === 2 ? "O" : "";
-    botao.disabled = fim || ocupado || v !== 0;
-    botao.setAttribute("aria-label", "Casa " + (i + 1) + (v ? ", " + (v === 1 ? "X" : "O") : ", vazia"));
-    botao.onclick = () => jogaHumano(i);
-    tabEl.appendChild(botao);
-  });
-  const corpo = document.querySelector("#stats tbody"); corpo.innerHTML = "";
-  Object.entries(stats).forEach(([k, s]) => {
-    const linha = document.createElement("tr");
-    [k, s.total, s.ok, erros(s), (100 * s.ok / s.total).toFixed(2) + "%", s.fn, s.fp, s.wr]
-      .forEach(txt => { const celula = document.createElement("td"); celula.textContent = txt; linha.appendChild(celula); });
-    corpo.appendChild(linha);
-  });
-  pegar("jogos").textContent = "Jogos concluídos: " + jogos;
-  try { localStorage.setItem("velha-ia-stats", JSON.stringify({ stats: stats, jogos: jogos })); } catch (e) {}
+// ----- 2 -----
+let auto = false, treinando = false, terminou = false;
+const stT = t => $("t_st").textContent = t;
+function desenhaGrafico(h, hardFrom) {
+  const c = $("graf"), g = c.getContext("2d"), W = c.width, H = c.height, m = 30;
+  g.clearRect(0, 0, W, H);
+  const todos = h.flatMap(x => [x.melhor, x.media, x.pior]);
+  const lo = Math.min(...todos), hi = Math.max(...todos), n = Math.max(h.length - 1, 1);
+  const X = i => m + (W - m - 8) * i / Math.max(n, 5), Y = v => H - m - (H - 2 * m) * (v - lo) / ((hi - lo) || 1);
+  g.strokeStyle = "#999"; g.fillStyle = "#444"; g.font = "11px sans-serif";
+  g.strokeRect(m, m - 10, W - m - 8, H - 2 * m + 10);
+  g.fillText(hi.toFixed(1), 2, m); g.fillText(lo.toFixed(1), 2, H - m); g.fillText("geração " + (h.length - 1), W - 80, H - 8);
+  if (hardFrom > 0 && hardFrom <= h.length - 1) { g.setLineDash([4, 3]); g.beginPath(); g.moveTo(X(hardFrom), m - 10); g.lineTo(X(hardFrom), H - m); g.stroke(); g.setLineDash([]); }
+  [["melhor", "#36c"], ["media", "#2a2"], ["pior", "#c33"]].forEach(([k, cor]) => {
+    g.strokeStyle = cor; g.beginPath(); h.forEach((x, i) => i ? g.lineTo(X(i), Y(x[k])) : g.moveTo(X(i), Y(x[k]))); g.stroke(); });
 }
-
-function log(txt, erro) {
-  const linha = document.createElement("div");
-  if (erro) linha.className = "erro";
-  linha.textContent = txt;
-  pegar("log").prepend(linha);
+function mostraPop(pop) {
+  const lo = Math.min(...pop), hi = Math.max(...pop), el = $("pop"); el.innerHTML = "";
+  pop.forEach((f, i) => { const l = document.createElement("div"); l.className = "linha";
+    l.innerHTML = `<span class="n">#${i + 1}</span><span class="v">${f.toFixed(2)}</span><div class="barra ${i === 0 ? "elite" : ""}" style="width:${4 + 280 * (f - lo) / ((hi - lo) || 1)}px"></div>`; el.appendChild(l); });
 }
-
-// Consulta a IA, compara com a regra exata, atualiza os contadores.
-// Retorna { continua, pred, ver }  (pred = saída da IA, ver = estado real).
-async function avalia(quem) {
-  const pred = await ia(tab), ver = real(tab);
-  const cont = stats[chave()] ||= { total: 0, ok: 0, fn: 0, fp: 0, wr: 0 };
-  cont.total++;
-  const msg = `Jogo ${nJogo} • ${chave()} • jogada ${tab.filter(Boolean).length} (${quem}) • IA: ${CLASSES[pred]} • real: ${CLASSES[ver]}`;
-
-  if (pred === ver) {
-    cont.ok++; log(msg + " • acerto");
-    return { continua: ver === 0, pred, ver };
-  }
-  if (pred === 0) {                    // IA não detectou o fim -> ENCERRA o jogo
-    cont.fn++; log(msg + " • ERRO: não detectou o fim (jogo encerrado)", true);
-    return { continua: false, pred, ver };
-  }
-  if (ver === 0) {                     // IA detectou fim inexistente -> CONTINUA o jogo
-    cont.fp++; log(msg + " • ERRO: fim detectado incorretamente (jogo continua)", true);
-    return { continua: true, pred, ver };
-  }
-  cont.wr++;                           // fim real, mas resultado errado -> encerra
-  log(msg + " • ERRO: fim detectado com resultado errado (jogo encerrado)", true);
-  return { continua: false, pred, ver };
+function mostraDemo(d) {
+  const t = Array(9).fill('b'), el = $("demo"), rede = d.rede_comeca ? 'x' : 'o';
+  d.lances.forEach(l => t[l.casa] = l.peca);
+  const inv = d.lances.find(l => l.invalida);
+  el.innerHTML = `<div class="mini">${t.map((v, i) => `<div class="${inv && inv.casa === i ? "inv" : ""}">${up(v)}</div>`).join("")}</div>
+    <div style="font-size:.85rem">Rede = ${rede.toUpperCase()} (${d.rede_comeca ? "começou" : "Minimax começou"}) → <b>${d.resultado}</b></div>`;
 }
-
-function terminaJogo(res) {
-  fim = true; jogos++;
-  const txt = res.ver === 1 ? "Você venceu!" : res.ver === 2 ? "A máquina venceu." : "Empate (deu velha).";
-  status(`${txt} (IA: ${CLASSES[res.pred]})`);
+function mostra(r) {
+  const h = r.historico[r.historico.length - 1];
+  stT(`Geração ${r.geracao}/${r.max_geracoes} · modo do Minimax: ${r.modo} · melhor ${h.melhor.toFixed(2)} · média ${h.media.toFixed(2)} · pior ${h.pior.toFixed(2)}` +
+      (r.fim ? ` · FIM por ${r.motivo}` : ""));
+  desenhaGrafico(r.historico, r.hard_from); mostraPop(r.populacao); if (r.demo) mostraDemo(r.demo);
 }
-
-// Retorna o resultado da avaliação se o jogo continua; null se terminou ou se a IA não respondeu.
-async function jogada(i, jogador, quem) {
-  tab[i] = jogador;
-  ocupado = true; render();
-  let res;
-  try { res = await avalia(quem); }
-  catch (e) {
-    tab[i] = 0; ocupado = false;
-    status("Não foi possível consultar a IA. O servidor está rodando?");
-    render(); return null;
-  }
-  ocupado = false;
-  if (!res.continua) { terminaJogo(res); render(); return null; }
-  status("IA: " + CLASSES[res.pred] + ".");
-  render(); return res;
+async function passo() {
+  if (treinando || terminou) return; treinando = true;
+  try { const r = await api("/api/treino/passo"); mostra(r); if (r.fim) { terminou = true; auto = false; $("t_auto").textContent = "▶ Treinar automático"; $("t_passo").disabled = $("t_auto").disabled = true; } }
+  catch (e) { stT("Erro: " + e.message); auto = false; }
+  treinando = false;
 }
+async function loopAuto() { while (auto && !terminou) await passo(); }
+$("t_ini").onclick = async () => {
+  auto = false; terminou = false; stT("Criando e avaliando população inicial...");
+  try { const r = await api("/api/treino/iniciar", { populacao: $("p_pop").value, ocultos: $("p_hid").value, geracoes: $("p_ger").value, hard_from: $("p_hf").value, mutacao: $("p_mut").value });
+    mostra(r); $("t_passo").disabled = $("t_auto").disabled = false; $("t_auto").textContent = "▶ Treinar automático"; $("demo").innerHTML = ""; }
+  catch (e) { stT("Erro: " + e.message); }
+};
+$("t_passo").onclick = passo;
+$("t_auto").onclick = () => { auto = !auto; $("t_auto").textContent = auto ? "⏸ Pausar" : "▶ Treinar automático"; if (auto) loopAuto(); };
 
-async function jogaHumano(i) {
-  if (fim || ocupado || tab[i]) return;
-  const res1 = await jogada(i, 1, "humano");
-  if (!res1) return;
-  ocupado = true; render();
-  setTimeout(async () => {
-    const livres = tab.map((v, k) => v ? -1 : k).filter(k => k >= 0);
-    ocupado = false;
-    if (!livres.length) { fim = true; jogos++; status("Empate (deu velha)."); render(); return; }
-    const res2 = await jogada(livres[Math.floor(Math.random() * livres.length)], 2, "máquina");
-    if (res2) {
-      status(`IA: ${CLASSES[res1.pred]} (após sua jogada) • ${CLASSES[res2.pred]} (após a da máquina). Sua vez (X).`);
-      render();
-    }
-  }, 350);
-}
-
-function novo() {
-  tab = Array(9).fill(0); fim = false; ocupado = false; nJogo++;
-  status("Sua vez (X).");
-  render();
-}
-
-function relatorio() {
-  const linhas = Object.entries(stats).map(([k, s]) =>
-    `${k}: avaliações=${s.total}, acertos=${s.ok}, erros=${erros(s)}, acurácia=${(100 * s.ok / s.total).toFixed(2)}% ` +
-    `(não detectou fim=${s.fn}; fim inexistente=${s.fp}; resultado errado=${s.wr})`);
-  return ["Relatório – IA de detecção de estado do jogo da velha", `Jogos concluídos: ${jogos}`, ...linhas].join("\n");
-}
-
-pegar("novo").onclick = novo;
-pegar("copiar").onclick = () => navigator.clipboard.writeText(relatorio()).then(() => status("Relatório copiado."), () => status(relatorio()));
-pegar("zerar").onclick = () => { stats = {}; jogos = 0; pegar("log").innerHTML = ""; novo(); };
-
-fetch("/opcoes").then(r => r.json()).then(o => {
-  pegar("ds").innerHTML = o.datasets.map(d => `<option>${d}</option>`).join("");
-  pegar("ds").value = "alternativo";
-  pegar("clf").innerHTML = o.classificadores.map(c => `<option>${c}</option>`).join("");
-  novo();
-}).catch(() => { tab = Array(9).fill(0); fim = true; status("Servidor indisponível. Rode: python servidor.py"); render(); });
+// ----- 3 -----
+let placar = { humano: 0, oponente: 0, empate: 0 };
+const j3 = criaJogo("r3tab", "r3st", (tab, peca) => api("/api/rede/jogar", { tabuleiro: tab, jogador: peca }), "A rede");
+j3.resultado = r => { placar[r]++; $("r3placar").textContent = `Placar – você: ${placar.humano} · rede: ${placar.oponente} · empates: ${placar.empate} · jogadas inválidas da rede: ${j3.invalidas || 0}`; };
+$("r3novo").onclick = () => j3.novo($("r3ini").value === 'u');
+$("r3acc").onclick = async () => {
+  $("r3st").textContent = "Calculando...";
+  try { const r = await api("/api/rede/acuracia", { partidas: $("r3n").value }); const tb = document.querySelector("#acc tbody"); tb.innerHTML = "";
+    for (const m of ["medio", "dificil"]) { const c = r[m]; tb.innerHTML += `<tr><td>${m}</td><td>${c.total}</td><td>${c.vitoria}</td><td>${c.empate}</td><td>${c.derrota}</td><td>${c.invalida}</td><td>${(100 * c.acuracia).toFixed(1)}%</td></tr>`; }
+    $("acc").hidden = $("accnota").hidden = false; $("r3st").textContent = "Acurácia calculada."; }
+  catch (e) { $("r3st").textContent = "Erro: " + e.message + " (treine a rede na aba 2 primeiro)"; }
+};
+$("r3tab").innerHTML = "<span>Clique em “Novo jogo”.</span>";
 </script>
 </body>
 </html>

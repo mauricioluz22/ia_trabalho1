@@ -1,52 +1,54 @@
-# Servidor do front end do jogo da velha.
+# Front end do T2: Minimax x usuario, treino da rede (MLP + AG) contra o Minimax, usuario x rede.
 # Uso (a partir da pasta do projeto):  python servidor.py   ->  http://localhost:5000
-# Usa as funcoes de src/classifiers.py como estao (inicializar_algoritmos e classificar_estado).
 import os
 import sys
 import threading
-os.chdir(os.path.dirname(os.path.abspath(__file__)))  # os datasets sao lidos com caminho relativo ("src/...")
-sys.path.insert(0, "src")                             # classifiers.py fica em src/
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, "src")
 
+import numpy as np
 from flask import Flask, jsonify, request, send_file
-import classifiers
+from minimax import pick_move_list, ttt_wins
+from genetic_class import Genetic
+from mlp import net_move, mlp_forward
 
 app = Flask(__name__)
-
-# classifiers.py guarda um unico conjunto de modelos: ao trocar de dataset, retreina com inicializar_algoritmos
-dataset_atual = "alternativo"
-classifiers.inicializar_algoritmos(dataset_atual)
 trava = threading.Lock()
+estado = {"g": None, "hidden": 0, "max_it": 0, "pesos": None}  # AG em andamento / pesos da melhor rede
 
 
-def classificar_com(ds, nome, estado):
-    global dataset_atual
-    with trava:
-        if ds != dataset_atual:
-            classifiers.inicializar_algoritmos(ds)
-            dataset_atual = ds
-        return int(classifiers.classificar_estado(estado, nome, ds)[0])
+def venceu(b, p):
+    return ttt_wins([b[0:3], b[3:6], b[6:9]], p)
 
 
-# Conversao do tabuleiro ('x', 'o', 'b' x 9) para o formato de cada dataset.
-# Replica dataset_converter.py (line_conv e line_conv_alternative); ele nao pode ser
-# importado porque reescreve os arquivos de dados ao ser executado.
-def converter_original(t):
-    mapa = {"x": [1, 0, 0], "o": [0, 1, 0], "b": [0, 0, 1]}
-    return [n for c in t for n in mapa[c]]
+def partida(pesos, hidden, hard, rede_comeca):
+    """Rede x Minimax. X sempre comeca. Retorna (lances, resultado do ponto de vista da rede)."""
+    b = ['b'] * 9
+    rede, mm = ('x', 'o') if rede_comeca else ('o', 'x')
+    vez, lances = 'x', []
+    while True:
+        if vez == rede:
+            m = net_move(pesos, b, rede, hidden)
+            if b[m] != 'b':  # jogada invalida: partida encerrada (mesma regra da aptidao)
+                lances.append({"casa": m, "peca": vez, "invalida": True})
+                return lances, "invalida"
+        else:
+            m = int(pick_move_list(b, mm, hard))
+        b[m] = vez
+        lances.append({"casa": m, "peca": vez, "invalida": False})
+        if venceu(b, vez):
+            return lances, "vitoria" if vez == rede else "derrota"
+        if 'b' not in b:
+            return lances, "empate"
+        vez = 'o' if vez == 'x' else 'x'
 
 
-def converter_alternativo(t):
-    def linhas_com_2(ch):  # igual a count_ch_in_lines: so olha as 3 linhas horizontais
-        return sum(1 for i in (0, 3, 6) if t[i:i + 3].count(ch) == 2)
-
-    qx, qo = t.count("x"), t.count("o")
-    ocupadas = qx + qo
-    # jogador: 1 - X, 0 - O (X joga quando o numero de posicoes ocupadas eh par)
-    return [qx, qo, ocupadas, linhas_com_2("x"), linhas_com_2("o"), t.count("b"),
-            1 if ocupadas % 2 == 0 else 0]
-
-
-CONVERSORES = {"original": converter_original, "alternativo": converter_alternativo}
+def resumo_ag():
+    g = estado["g"]
+    h = g.history[-1]
+    fit = sorted(g.fitness_list(), reverse=True)
+    return {"geracao": h["geracao"], "modo": h["modo"], "historico": g.history, "populacao": fit,
+            "max_geracoes": estado["max_it"], "hard_from": g.hard_from}
 
 
 @app.get("/")
@@ -54,20 +56,79 @@ def index():
     return send_file("index.html")
 
 
-@app.get("/opcoes")
-def opcoes():
-    return jsonify({"datasets": list(CONVERSORES), "classificadores": list(classifiers.classificadores)})
-
-
-@app.post("/classificar")
-def classificar():
+@app.post("/api/minimax")
+def api_minimax():
     d = request.get_json()
-    t, nome, ds = d["tabuleiro"], d["classificador"], d["dataset"]
-    if ds not in CONVERSORES or nome not in classifiers.classificadores \
-            or len(t) != 9 or any(c not in "xob" for c in t):
+    t = d["tabuleiro"]
+    if len(t) != 9 or any(c not in "xob" for c in t) or d["jogador"] not in "xo" or "b" not in t:
         return jsonify({"erro": "entrada invalida"}), 400
-    # 0 = tem jogo, 1 = x venceu, 2 = o venceu, 3 = empate
-    return jsonify({"classe": classificar_com(ds, nome, CONVERSORES[ds](t))})
+    return jsonify({"casa": int(pick_move_list(list(t), d["jogador"], d["modo"] == "dificil"))})
+
+
+@app.post("/api/treino/iniciar")
+def treino_iniciar():
+    d = request.get_json()
+    pop, hidden, its = int(d["populacao"]), int(d["ocultos"]), int(d["geracoes"])
+    with trava:
+        g = Genetic(pop, hidden, iterations=its, mutation_rate=float(d["mutacao"]),
+                    hard_from=int(d["hard_from"]))
+        estado.update(g=g, hidden=hidden, max_it=its, pesos=g.best_weights())
+        return jsonify(resumo_ag())
+
+
+@app.post("/api/treino/passo")
+def treino_passo():
+    with trava:
+        g = estado["g"]
+        if g is None:
+            return jsonify({"erro": "treino nao iniciado"}), 400
+        fim, _ = g.run_single_loop()
+        estado["pesos"] = g.best_weights()
+        r = resumo_ag()
+        r["fim"] = fim
+        if fim:
+            r["motivo"] = "numero de geracoes" if g.iteration >= g.max_it else "convergencia"
+        # partida de demonstracao: melhor rede x minimax (modo atual), alternando quem comeca
+        lances, res = partida(estado["pesos"], estado["hidden"], g.hardmode, r["geracao"] % 2 == 0)
+        r["demo"] = {"lances": lances, "resultado": res, "rede_comeca": r["geracao"] % 2 == 0}
+        return jsonify(r)
+
+
+@app.post("/api/rede/jogar")
+def rede_jogar():
+    d = request.get_json()
+    t, me = d["tabuleiro"], d["jogador"]
+    if estado["pesos"] is None:
+        return jsonify({"erro": "rede nao treinada"}), 400
+    mapped = [0 if c == 'b' else (1 if c == me else -1) for c in t]
+    saida = mlp_forward(estado["pesos"], mapped, estado["hidden"])
+    casa = int(np.argmax(saida))
+    invalida = t[casa] != 'b'
+    if invalida:  # no jogo contra o usuario usamos a melhor casa livre, mas sinalizamos o erro
+        livres = [i for i in range(9) if t[i] == 'b']
+        casa = max(livres, key=lambda i: saida[i])
+    return jsonify({"casa": casa, "invalida": invalida})
+
+
+@app.post("/api/rede/acuracia")
+def rede_acuracia():
+    """Rede x Minimax em N partidas por modo (inicio alternado). Acuracia = partidas sem derrota e sem jogada invalida."""
+    if estado["pesos"] is None:
+        return jsonify({"erro": "rede nao treinada"}), 400
+    n = int(request.get_json().get("partidas", 20))
+    out = {}
+    with trava:
+        for modo in ("medio", "dificil"):
+            hard = modo == "dificil"
+            cont = {"vitoria": 0, "empate": 0, "derrota": 0, "invalida": 0}
+            total = 2 if hard else n  # modo dificil e deterministico: so 2 partidas distintas (quem comeca)
+            for k in range(total):
+                _, res = partida(estado["pesos"], estado["hidden"], hard, k % 2 == 0)
+                cont[res] += 1
+            cont["total"] = total
+            cont["acuracia"] = (cont["vitoria"] + cont["empate"]) / total
+            out[modo] = cont
+    return jsonify(out)
 
 
 if __name__ == "__main__":
