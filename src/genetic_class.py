@@ -1,6 +1,7 @@
 import sys, time
 from functools import reduce
 from minimax import ttt_wins, pick_move, pick_move_list
+from mlp import mlp_pick_move
 
 import numpy as np
 
@@ -46,7 +47,7 @@ def crossover_blx_a(p1, p2, alpha: float = 0.25, single_beta: bool = True):
     return np.array(p1) + beta * (np.array(p2) - np.array(p1))
 
 class Genetic:
-    def __init__(self, population_size: int, mlp_hidden_layer: int = 18, iterations: int = 300, mutation_rate: float = 0.001, hardmode: bool = True, verbose: bool = False):
+    def __init__(self, population_size: int, mlp_hidden_layer: int = 18, iterations: int = 300, mutation_rate: float = 0.05, hardmode: bool = True, verbose: bool = False, hard_from: int | None = None, mix_medium: bool = True, crossover: str = 'arith'):
         self.mlp_hidden_layer = mlp_hidden_layer
         # + 1 ao final para a heuristica
         self.row_len = (self.mlp_hidden_layer * 9 + self.mlp_hidden_layer) + (self.mlp_hidden_layer * 9 + 9) + 1
@@ -56,9 +57,18 @@ class Genetic:
         self.verbose = verbose
         self.iteration = 0
         self.hardmode = hardmode
+        # curriculo: se hard_from for definido, joga no modo medio ate a geracao hard_from e no dificil a partir dela
+        self.hard_from = hard_from
+        # no modo dificil, tambem joga partidas no medio: evita aptidao "plana" (perder sempre = mesma nota)
+        self.mix_medium = mix_medium
+        self.crossover = crossover  # 'arith' (aritmetico, 2 filhos) ou 'blx' (BLX-alpha, 1 filho por chamada)
+        if hard_from is not None:
+            self.hardmode = hard_from <= 0
+        self.history: list[dict] = []  # estatisticas por geracao (para o front)
 
         self.matrix = rng.uniform(LIM_A,LIM_B,size=(self.pop_size, self.row_len))
         self.__heuristic(self.matrix)
+        self.__record()
         
         if self.verbose:
             print('populacao inicial:')
@@ -92,17 +102,38 @@ class Genetic:
         self.iteration += 1
         return (False, [])
        
+    # convergencia: 90% da populacao com aptidao a no maximo CONV_TOL da melhor.
+    # So vale depois que o curriculo chegou ao modo dificil.
+    CONV_TOL = 0.5
     def __has_converged(self) -> bool:
-        _, counts = np.unique(self.matrix[:, -1], return_counts=True)
-        return counts.max() / self.pop_size >= 0.9
+        if self.hard_from is not None and not self.hardmode:
+            return False
+        fit = self.matrix[:, -1]
+        return float(np.mean(fit >= fit.max() - self.CONV_TOL)) >= 0.9
+
+    def __record(self) -> None:
+        fit = self.matrix[:, -1]
+        self.history.append({
+            'geracao': len(self.history),
+            'modo': 'dificil' if self.hardmode else 'medio',
+            'melhor': float(fit.max()), 'media': float(fit.mean()), 'pior': float(fit.min()),
+        })
+
+    def best_weights(self) -> list[float]:
+        return [float(x) for x in self.__closest_best()[:-1]]
+
+    def fitness_list(self) -> list[float]:
+        return [float(x) for x in self.matrix[:, -1]]
 
     def __update_matrix(self):
         # necessario se usarmos BLX-a
         # def __valid_kid(kid: list[float]) -> bool:
         #     return all(e >= LIM_A and e <= LIM_B for e in kid)
 
+        if self.hard_from is not None:
+            self.hardmode = (self.iteration + 1) >= self.hard_from
         # selecao por elitismo
-        elit = self.__closest_best()
+        elit = self.__closest_best().copy()
         # intermediate = np.array([])
         intermediate = np.zeros((self.pop_size, self.row_len))
         # coluna da heuristica removida nesse passo ate gerarmos toda a nova populacao
@@ -126,14 +157,16 @@ class Genetic:
             #     kid = crossover_blx_a(father, mother)
 
             # reproducao usando crossover aritmetico (gera dois filhos)
-            kid1, kid2 = crossover_arith(father, mother)
-            if rng.random() < self.mutation:
-                # mutacao limite (pagina 29 do pdf). Util quando usamos crossover aritmetico conforme o documento
-                chromossome = rng.choice([kid1, kid2])
-                # descomentar linha abaixo e comentar a de cima ao usar BLX-a
-                # chromossome = kid
-                gene = rng.choice(range(0, len(chromossome) - 1))
-                chromossome[gene] = LIM_A if rng.random() < 0.5 else LIM_B
+            if self.crossover == 'blx':
+                kid1 = np.array(crossover_blx_a(father, mother, single_beta=False))
+                kid2 = np.array(crossover_blx_a(father, mother, single_beta=False))
+            else:
+                kid1, kid2 = crossover_arith(father, mother)
+            # mutacao por gene: perturbacao gaussiana, limitada a [LIM_A, LIM_B]
+            for kid in (kid1, kid2):
+                mask = rng.random(self.row_len - 1) < self.mutation
+                kid[:-1][mask] += rng.normal(0, 0.3, int(mask.sum()))
+                kid[:-1] = np.clip(kid[:-1], LIM_A, LIM_B)
 
             # resultado do BLX-a, caso usado:
             # intermediate.append(kid)
@@ -152,6 +185,7 @@ class Genetic:
             [print(x) for x in intermediate]
             print()
         self.matrix = intermediate
+        self.__record()
 
     # Cálculo da heurística:
     #  
@@ -171,11 +205,10 @@ class Genetic:
         mapping_x = { 'b': 0, 'o':-1, 'x':1 } # sugestão do claude: peça em jogo é sempre positiva, enquanto oponente é negativo
         for row in intermediate:
             # TODO - separar direitinho os pesos e biases
-            minimax_plays = rng.random() < 0.5 # controla se minimax joga primeiro ou não. definido aleatoriamente
-            me, other = ('o','x') if minimax_plays else ('x', 'o')
-            mapping = mapping_x if me == 'x' else mapping_o
-            
-            loops = 1 if self.hardmode else 5
+            # quantidade par de partidas: metade com o minimax iniciando, metade com a rede iniciando
+            modes = ([True, True] + ([False] * 4 if self.mix_medium else [])) if self.hardmode else [False] * 6
+            loops = len(modes)
+            game_idx = 0
             subscores = []
             while loops > 0:
                 me_wins = False
@@ -183,13 +216,19 @@ class Genetic:
                 tie = False
                 board = [['b','b','b'], ['b','b','b'], ['b','b','b']]
                 empty_count = 9
+                game_hard = modes[len(modes) - loops]
                 loops -= 1
                 subscores.append(0)
+                # alterna quem inicia a cada partida
+                minimax_plays = game_idx % 2 == 0
+                game_idx += 1
+                me, other = ('o','x') if minimax_plays else ('x', 'o')
+                mapping = mapping_x if me == 'x' else mapping_o
 
                 while empty_count > 0:
                     if minimax_plays:
                         # begin = time.time_ns()
-                        (i, j) = pick_move(board, other, hardmode=self.hardmode)
+                        (i, j) = pick_move(board, other, hardmode=game_hard)
                         # print(f"end={not minimax_plays}={(time.time_ns() - begin) / 1e6}")
                         if j < 0 or i < 0:
                             break # jogo terminou. checagem potencialmente redundante
@@ -197,10 +236,10 @@ class Genetic:
                         empty_count -= 1
                         minimax_plays = False
                     else:
-                        # TODO - Fazer IA realizar as jogadas
-                        # remapped = [[mapping[x] for x in row] for row in board]
-                        # print(me, remapped)
-                        (i, j) = (0,0)
+                        # rede neural joga: entrada = tabuleiro achatado (minha peca +1, oponente -1, vazio 0)
+                        remapped = [mapping[x] for r in board for x in r]
+                        move = mlp_pick_move(row[:-1], remapped, self.mlp_hidden_layer)
+                        (i, j) = (move // 3, move % 3)
                         # verifica se a jogada é inválida
                         if board[i][j] != 'b':
                             subscores[-1] -= 10
@@ -212,6 +251,8 @@ class Genetic:
                     me_wins = ttt_wins(board, me)
                     they_win = ttt_wins(board, other)
                     tie = not me_wins and not they_win and empty_count == 0
+                    if me_wins or they_win:
+                        break
         
                 if me_wins:
                     subscores[-1] += 10
